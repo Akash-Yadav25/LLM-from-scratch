@@ -4,14 +4,16 @@ This project involves running a Jupyter Notebook to perform tasks using GPT-2 (1
 
 ---
 
+
 ## 📋 Prerequisites
 
 Make sure you have the following installed:
 - Python 3.7+
 - Jupyter Notebook
-- Basic dependencies (install with `pip install -r requirements.txt` if provided)
+
 
 ---
+
 
 ## 🚀 Setup Instructions
 
@@ -39,6 +41,10 @@ In the root of this project, create a folder named `gpt2`, and place the extract
 ### ▶️ Step 5: Continue Running the Notebook
 
 After setting up the weights, go back to the notebook and **continue running the remaining cells after cell #140**.
+
+
+---
+
 
 This will:
 
