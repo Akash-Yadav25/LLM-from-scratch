@@ -19,12 +19,12 @@ Make sure you have the following installed:
 
 ### 1. **Open the Notebook**
 
-Open the main notebook file using Jupyter Notebook:
+Open the main gptLLM notebook file using Jupyter Notebook:
 
 
 
-### 2. **Run Cells Until Step 140**
-Run all the cells up to and including the 140th cell. These cells prepare the environment and show case a small DEMO of LLM which uses the-verdict.txt.
+### 2. **Run Cells**
+Run all the cells up to and including the Training Loop. These cells prepare the environment and show case a small DEMO of LLM which uses the-verdict.txt and how training loop helps in generating better result.
 
 ### Step 3: Download GPT-2 (124M) Weights
 
@@ -44,6 +44,8 @@ After setting up the weights, go back to the notebook and **continue running the
 
 
 ---
+### ▶NOTE : 
+I have used CUDA everywhere but in Training loop I have used CPU because of low GPU Memory. If you want to use CUDA simply replace device = torch.device("cpu") with device = torch.device("cuda")
 
 
 This will:
