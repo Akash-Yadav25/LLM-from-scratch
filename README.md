@@ -19,7 +19,7 @@ Make sure you have the following installed:
 
 ### 1. **Open the Notebook**
 
-Open the main gptLLM notebook file using Jupyter Notebook:
+Open the main gptLLM.ipynb notebook file using Jupyter Notebook:
 
 
 
