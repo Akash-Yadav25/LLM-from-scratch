@@ -4,3 +4,5 @@ gpt2/
 124M.tar
 model.pth
 model_and_optimizer.pth
+gpt2_345M_pretrained.pth
+*.pth
