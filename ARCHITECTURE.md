@@ -100,10 +100,10 @@ flowchart TD
 * **Embeddings:** Input tokens are mapped to vector representations by summing token embeddings and learned positional embeddings:
 
 $$
-\mathbf{X}_0 = \text{Embedding}_{\text{tok}}(\text{in\_idx}) + \text{Embedding}_{\text{pos}}(\mathbf{p})
+\mathbf{X}_0 = \text{Embedding}_{\text{tok}}(\mathbf{x}) + \text{Embedding}_{\text{pos}}(\mathbf{p})
 $$
 
-where $\mathbf{p} = [0, 1, 2, \dots, T-1]$. Unlike modern models using Rotary Position Embeddings (RoPE), GPT-2 uses **learned absolute positional embeddings** with a hard context limit of 1,024 tokens.
+where $\mathbf{x} = [x_0, x_1, \dots, x_{T-1}]$ represents the input token sequence and $\mathbf{p} = [0, 1, 2, \dots, T-1]$ represents the positional indices. Unlike modern models using Rotary Position Embeddings (RoPE), GPT-2 uses **learned absolute positional embeddings** with a hard context limit of 1,024 tokens.
 
 ---
 
