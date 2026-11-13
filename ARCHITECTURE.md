@@ -8,7 +8,7 @@ This document provides a comprehensive technical breakdown of the GPT-2 (Generat
 
 GPT-2 is an **autoregressive, causal decoder-only transformer**. 
 
-```
+```text
 Input Tokens ──► Token & Pos Embeddings ──► [Transformer Block] × N ──► Final LayerNorm ──► Linear Head ──► Logits
 ```
 
@@ -26,31 +26,31 @@ The codebase supports standard OpenAI GPT-2 model specifications:
 | Parameter | GPT-2 Small (124M) | GPT-2 Medium (345M - Active) | GPT-2 Large (774M) | GPT-2 XL (1558M) |
 | :--- | :---: | :---: | :---: | :---: |
 | **Vocabulary Size ($V$)** | 50,257 | **50,257** | 50,257 | 50,257 |
-| **Context Length ($T_{max}$)** | 1,024 | **1,024** | 1,024 | 1,024 |
-| **Embedding Dimension ($d_{model}$)** | 768 | **1,024** | 1,280 | 1,600 |
+| **Context Length ($T_{\text{max}}$)** | 1,024 | **1,024** | 1,024 | 1,024 |
+| **Embedding Dimension ($d_{\text{model}}$)** | 768 | **1,024** | 1,280 | 1,600 |
 | **Attention Heads ($h$)** | 12 | **16** | 20 | 25 |
-| **Head Dimension ($d_{head} = d / h$)** | 64 | **64** | 64 | 64 |
+| **Head Dimension ($d_{\text{head}} = d / h$)** | 64 | **64** | 64 | 64 |
 | **Transformer Layers ($N$)** | 12 | **24** | 36 | 48 |
 | **QKV Bias** | True | **True** | True | True |
 | **Total Parameters** | ~124,439,808 | **~354,823,168** | ~774,030,080 | ~1,557,611,200 |
 
 ### Mathematical Parameter Calculation for 345M:
-* **Token Embeddings (`tok_emb`):** $V \times d_{model} = 50,257 \times 1,024 = \mathbf{51,463,168}$
-* **Positional Embeddings (`pos_emb`):** $T_{max} \times d_{model} = 1,024 \times 1,024 = \mathbf{1,048,576}$
+* **Token Embeddings (`tok_emb`):** $V \times d_{\text{model}} = 50,257 \times 1,024 = \mathbf{51,463,168}$
+* **Positional Embeddings (`pos_emb`):** $T_{\text{max}} \times d_{\text{model}} = 1,024 \times 1,024 = \mathbf{1,048,576}$
 * **Per Transformer Block ($N = 24$):**
-  * Multi-Head Attention:
-    * $W_Q, W_K, W_V$ weights + biases: $3 \times (d_{model} \times d_{model} + d_{model}) = 3 \times (1,024 \times 1,024 + 1,024) = 3,148,800$
-    * $W_O$ (Out projection) weight + bias: $d_{model} \times d_{model} + d_{model} = 1,049,600$
-    * Total Attention: $4,198,400$
-  * Feed-Forward Network (MLP):
+  * **Multi-Head Attention:**
+    * Query, Key, Value weights + biases: $3 \times (d_{\text{model}}^2 + d_{\text{model}}) = 3 \times (1,024^2 + 1,024) = 3,148,800$
+    * Output projection weight + bias: $d_{\text{model}}^2 + d_{\text{model}} = 1,048,576 + 1,024 = 1,049,600$
+    * *Total Attention Parameters:* $4,198,400$
+  * **Feed-Forward Network (MLP):**
     * Linear 1 (Expansion $1024 \to 4096$): $1,024 \times 4,096 + 4,096 = 4,198,400$
     * Linear 2 (Contraction $4096 \to 1024$): $4,096 \times 1,024 + 1,024 = 4,195,328$
-    * Total MLP: $8,393,728$
-  * Layer Normalizations (`norm1`, `norm2`): $2 \times (2 \times d_{model}) = 4,096$
-  * Single Block Total: $\approx 12,596,224$ params
-  * Total for 24 Blocks: $24 \times 12,596,224 = \mathbf{302,309,376}$
-* **Final LayerNorm:** $2 \times d_{model} = \mathbf{2,048}$
-* **Output Head (`out_head`):** $d_{model} \times V = 1,024 \times 50,257 = \mathbf{51,463,168}$ *(Note: In weight-tied models, this shares storage with `tok_emb`)*.
+    * *Total MLP Parameters:* $8,393,728$
+  * **Layer Normalizations (`norm1`, `norm2`):** $2 \times (2 \times d_{\text{model}}) = 4,096$
+  * *Single Block Total:* $\approx 12,596,224$ parameters
+  * *Total for 24 Blocks:* $24 \times 12,596,224 = \mathbf{302,309,376}$
+* **Final LayerNorm:** $2 \times d_{\text{model}} = \mathbf{2,048}$
+* **Output Head (`out_head`):** $d_{\text{model}} \times V = 1,024 \times 50,257 = \mathbf{51,463,168}$ *(Note: In weight-tied models, this shares storage with `tok_emb`)*.
 
 ---
 
@@ -95,17 +95,27 @@ flowchart TD
 ## 4. Detailed Component Walkthrough
 
 ### 4.1 Tokenization & Positional Encoding
+
 * **Byte-Pair Encoding (BPE):** Text is tokenized into subwords using OpenAI's `tiktoken` (`gpt2` encoding), supporting a vocabulary of 50,257 tokens (including `<|endoftext|>`).
-* **Embeddings:**
-  $$\mathbf{X}_0 = \text{Embedding}_{tok}(\text{in\_idx}) + \text{Embedding}_{pos}(\mathbf{p})$$
-  where $\mathbf{p} = [0, 1, 2, \dots, T-1]$. Unlike modern models using Rotary Position Embeddings (RoPE), GPT-2 uses **learned absolute positional embeddings** with a hard context limit of 1,024 tokens.
+* **Embeddings:** Input tokens are mapped to vector representations by summing token embeddings and learned positional embeddings:
+
+$$
+\mathbf{X}_0 = \text{Embedding}_{\text{tok}}(\text{in\_idx}) + \text{Embedding}_{\text{pos}}(\mathbf{p})
+$$
+
+where $\mathbf{p} = [0, 1, 2, \dots, T-1]$. Unlike modern models using Rotary Position Embeddings (RoPE), GPT-2 uses **learned absolute positional embeddings** with a hard context limit of 1,024 tokens.
 
 ---
 
 ### 4.2 Pre-Layer Normalization
+
 Applied prior to multi-head attention and the feed-forward network:
-$$\text{LayerNorm}(\mathbf{x}) = \frac{\mathbf{x} - \mu}{\sqrt{\sigma^2 + \epsilon}} \odot \boldsymbol{\gamma} + \boldsymbol{\beta}$$
-* $\mu, \sigma^2$: Mean and variance calculated across the feature dimension $d_{model}$ for each token independently.
+
+$$
+\text{LayerNorm}(\mathbf{x}) = \frac{\mathbf{x} - \mu}{\sqrt{\sigma^2 + \epsilon}} \odot \boldsymbol{\gamma} + \boldsymbol{\beta}
+$$
+
+* $\mu, \sigma^2$: Mean and variance calculated across the feature dimension $d_{\text{model}}$ for each token independently.
 * $\boldsymbol{\gamma}$ (`scale`), $\boldsymbol{\beta}$ (`shift`): Learnable affine parameters.
 * $\epsilon = 10^{-5}$: Numerical stabilization factor.
 
@@ -128,54 +138,117 @@ flowchart LR
     Concat --> OutProj["out_proj (Linear) -> Output: (B, T, d)"]
 ```
 
-#### Attention Steps:
-1. **Projection:** Input $\mathbf{X} \in \mathbb{R}^{B \times T \times d_{model}}$ is projected into Query ($\mathbf{Q}$), Key ($\mathbf{K}$), and Value ($\mathbf{V}$) matrices:
-   $$\mathbf{Q} = \mathbf{X} \mathbf{W}_Q + \mathbf{b}_Q, \quad \mathbf{K} = \mathbf{X} \mathbf{W}_K + \mathbf{b}_K, \quad \mathbf{V} = \mathbf{X} \mathbf{W}_V + \mathbf{b}_V$$
-2. **Multi-Head Reshape:** Each tensor of shape $(B, T, d_{model})$ is split into $h = 16$ heads, each with dimension $d_{head} = 64$:
-   $$\mathbf{Q}, \mathbf{K}, \mathbf{V} \in \mathbb{R}^{B \times h \times T \times d_{head}}$$
-3. **Scaled Dot-Product:**
-   $$\mathbf{S} = \frac{\mathbf{Q} \mathbf{K}^T}{\sqrt{d_{head}}}$$
-4. **Causal Masking:**
-   $$\mathbf{S}_{b, h, i, j} = \begin{cases} \mathbf{S}_{b, h, i, j} & \text{if } j \le i \\ -\infty & \text{if } j > i \end{cases}$$
-   *This ensures $\text{softmax}(-\infty) = 0$, completely preventing position $i$ from attending to future tokens $j > i$.*
-5. **Attention Weights & Aggregation:**
-   $$\mathbf{A} = \text{Dropout}(\text{Softmax}(\mathbf{S}, \text{dim}=-1))$$
-   $$\mathbf{O}_{heads} = \mathbf{A} \mathbf{V} \in \mathbb{R}^{B \times h \times T \times d_{head}}$$
-6. **Output Combination:** Heads are concatenated back to $(B, T, d_{model})$ and projected linearly:
-   $$\text{Context} = \mathbf{O}_{heads} \mathbf{W}_O + \mathbf{b}_O$$
+#### Step 1: Projection
+Input $\mathbf{X} \in \mathbb{R}^{B \times T \times d_{\text{model}}}$ is linearly projected into Query ($\mathbf{Q}$), Key ($\mathbf{K}$), and Value ($\mathbf{V}$) matrices:
+
+$$
+\mathbf{Q} = \mathbf{X} \mathbf{W}_Q + \mathbf{b}_Q, \quad \mathbf{K} = \mathbf{X} \mathbf{W}_K + \mathbf{b}_K, \quad \mathbf{V} = \mathbf{X} \mathbf{W}_V + \mathbf{b}_V
+$$
+
+#### Step 2: Multi-Head Reshape & Transpose
+Each tensor of shape $(B, T, d_{\text{model}})$ is split into $h = 16$ heads of dimension $d_{\text{head}} = 64$:
+
+$$
+\mathbf{Q}, \mathbf{K}, \mathbf{V} \in \mathbb{R}^{B \times h \times T \times d_{\text{head}}}
+$$
+
+#### Step 3: Scaled Dot-Product Attention Scores
+Compute pairwise query-key compatibility scores:
+
+$$
+\mathbf{S} = \frac{\mathbf{Q} \mathbf{K}^T}{\sqrt{d_{\text{head}}}}
+$$
+
+#### Step 4: Causal Masking
+To prevent tokens from attending to future positions, upper-triangular elements are masked to $-\infty$:
+
+$$
+\mathbf{S}_{b, h, i, j} = \begin{cases} \mathbf{S}_{b, h, i, j} & \text{if } j \le i \\ -\infty & \text{if } j > i \end{cases}
+$$
+
+*Because $\text{softmax}(-\infty) = 0$, position $i$ cannot attend to any future token $j > i$.*
+
+#### Step 5: Softmax & Value Aggregation
+Normalize attention scores into probability distributions and multiply by $\mathbf{V}$:
+
+$$
+\mathbf{A} = \text{Dropout}(\text{Softmax}(\mathbf{S}, \text{dim}=-1))
+$$
+
+$$
+\mathbf{O}_{\text{heads}} = \mathbf{A} \mathbf{V} \in \mathbb{R}^{B \times h \times T \times d_{\text{head}}}
+$$
+
+#### Step 6: Output Combination & Projection
+Concatenate heads back to $(B, T, d_{\text{model}})$ and apply the final linear projection:
+
+$$
+\text{Context} = \mathbf{O}_{\text{heads}} \mathbf{W}_O + \mathbf{b}_O
+$$
 
 ---
 
 ### 4.4 Feed-Forward Network (FFN / MLP)
+
 The position-wise feed-forward network consists of two linear transformations with an intermediate activation function:
-$$\text{FFN}(\mathbf{x}) = \text{GELU}(\mathbf{x} \mathbf{W}_1 + \mathbf{b}_1) \mathbf{W}_2 + \mathbf{b}_2$$
-* **Expansion:** Projects from $d_{model} = 1024 \to 4 \times 1024 = 4096$.
-* **Activation:** **Gaussian Error Linear Unit (GELU)**:
-  $$\text{GELU}(x) = x \cdot \Phi(x) = 0.5 x \left(1 + \text{tanh}\left(\sqrt{\frac{2}{\pi}} \left(x + 0.044715 x^3\right)\right)\right)$$
-  *GELU introduces smooth probabilistic non-linearity, outperforming ReLU in transformer models.*
+
+$$
+\text{FFN}(\mathbf{x}) = \text{GELU}(\mathbf{x} \mathbf{W}_1 + \mathbf{b}_1) \mathbf{W}_2 + \mathbf{b}_2
+$$
+
+* **Expansion:** Projects from $d_{\text{model}} = 1024 \to 4 \times 1024 = 4096$.
+* **Activation (Gaussian Error Linear Unit - GELU):**
+
+$$
+\text{GELU}(x) = x \cdot \Phi(x) = 0.5 x \left(1 + \tanh\left(\sqrt{\frac{2}{\pi}} \left(x + 0.044715 x^3\right)\right)\right)
+$$
+
+  *GELU introduces smooth probabilistic non-linearity, outperforming standard ReLU in transformer architectures.*
 * **Contraction:** Projects back from $4096 \to 1024$.
 
 ---
 
 ### 4.5 Residual Connections
-Each sub-layer is wrapped in a residual connection:
-$$\mathbf{X}_{mid} = \mathbf{X} + \text{Dropout}(\text{Attention}(\text{LayerNorm}_1(\mathbf{X})))$$
-$$\mathbf{X}_{out} = \mathbf{X}_{mid} + \text{Dropout}(\text{FFN}(\text{LayerNorm}_2(\mathbf{X}_{mid})))$$
+
+Each sub-layer is wrapped in an additive residual connection:
+
+$$
+\mathbf{X}_{\text{mid}} = \mathbf{X} + \text{Dropout}(\text{Attention}(\text{LayerNorm}_1(\mathbf{X})))
+$$
+
+$$
+\mathbf{X}_{\text{out}} = \mathbf{X}_{\text{mid}} + \text{Dropout}(\text{FFN}(\text{LayerNorm}_2(\mathbf{X}_{\text{mid}})))
+$$
+
 Residual connections provide unimpeded gradient highways from the output layers directly back to early layers, preventing the vanishing gradient problem across 24 layers.
 
 ---
 
 ### 4.6 Unembedding & Decoding
-1. **Final Normalization:** After the 24th block, representations pass through a final LayerNorm:
-   $$\mathbf{H}_{final} = \text{LayerNorm}_{final}(\mathbf{X}_{24}) \in \mathbb{R}^{B \times T \times 1024}$$
-2. **Logits Projection:**
-   $$\mathbf{Z} = \mathbf{H}_{final} \mathbf{W}_{head} \in \mathbb{R}^{B \times T \times 50,257}$$
-3. **Sampling Strategy (`generate`):**
-   * **Last Logits Selection:** Extract $\mathbf{z}_{last} = \mathbf{Z}[:, -1, :]$.
-   * **Top-K Filtering:** Restrict choices to the top $K$ highest-probability tokens by masking values below the $K$-th logit to $-\infty$.
-   * **Temperature Scaling:** Scale logits by temperature $T$: $\mathbf{z}' = \mathbf{z} / T$.
-   * **Multinomial Sampling:** Convert to probabilities via Softmax and draw the next token:
-     $$\mathbf{y}_{next} \sim \text{Categorical}(\text{Softmax}(\mathbf{z}'))$$
+
+#### 1. Final Layer Normalization
+After the 24th transformer block, representations pass through a final LayerNorm:
+
+$$
+\mathbf{H}_{\text{final}} = \text{LayerNorm}_{\text{final}}(\mathbf{X}_{24}) \in \mathbb{R}^{B \times T \times 1024}
+$$
+
+#### 2. Logits Projection
+The normalized vectors are projected back to the vocabulary space:
+
+$$
+\mathbf{Z} = \mathbf{H}_{\text{final}} \mathbf{W}_{\text{head}} \in \mathbb{R}^{B \times T \times 50,257}
+$$
+
+#### 3. Autoregressive Sampling Strategy (`generate`)
+* **Extract Last Logits:** $\mathbf{z}_{\text{last}} = \mathbf{Z}[:, -1, :]$
+* **Top-K Filtering:** Restrict choices to the top $K$ highest-probability tokens by masking logits below the $K$-th value to $-\infty$.
+* **Temperature Scaling:** Scale logits by temperature $T$: $\mathbf{z}' = \mathbf{z} / T$.
+* **Multinomial Sampling:** Convert to probabilities via Softmax and draw the next token:
+
+$$
+\mathbf{y}_{\text{next}} \sim \text{Categorical}(\text{Softmax}(\mathbf{z}'))
+$$
 
 ---
 
@@ -186,7 +259,7 @@ Residual connections provide unimpeded gradient highways from the output layers 
    * *After:* `attn_scores = attn_scores.masked_fill(mask_bool, -torch.inf)` (guarantees true causal language modeling).
 2. **Proper 345M Scaling:**
    * Separated `GPT_CONFIG_124M` and `GPT_CONFIG_345M`.
-   * Loaded OpenAI's 345M checkpoint with $d_{model}=1024$, $h=16$, and $N=24$.
+   * Loaded OpenAI's 345M checkpoint with $d_{\text{model}}=1024$, $h=16$, and $N=24$.
 3. **Vectorized Top-K Broadcasting:**
    * Replaced `top_logits[:, -1]` with `top_logits[:, -1:]` ensuring seamless multi-batch $(B > 1)$ text generation without dimension broadcasting exceptions.
 4. **Hardware Acceleration for Apple Silicon:**
